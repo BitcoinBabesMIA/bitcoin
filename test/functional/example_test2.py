@@ -79,6 +79,8 @@ class ExampleTest(BitcoinTestFramework):
     # Override the set_test_params(), skip_test_if_missing_module(), add_options(), setup_chain(), setup_network()
     # and setup_nodes() methods to customize the test setup as required.
 
+    
+
     def set_test_params(self):
         """Override test parameters for your individual test.
 
@@ -124,7 +126,7 @@ class ExampleTest(BitcoinTestFramework):
         # In this test, we're not connecting node2 to node0 or node1. Calls to
         # sync_all() should not include node2, since we're not expecting it to
         # sync.
-        self.connect_nodes(0, 1)
+        self.connect_nodes(1, 2)
         self.sync_all(self.nodes[0:2])
 
     # Use setup_nodes() to customize the node start behaviour (for example if
@@ -132,93 +134,28 @@ class ExampleTest(BitcoinTestFramework):
     # def setup_nodes():
     #     pass
 
-    def custom_method(self):
-        """Do some custom behaviour for this test
 
-        Define it in a method here because you're going to use it repeatedly.
-        If you think it's useful in general, consider moving it to the base
-        BitcoinTestFramework class so other tests can use it."""
-
-        self.log.info("Running custom_method")
 
     def run_test(self):
         """Main test logic"""
 
         # Create P2P connections will wait for a verack to make sure the connection is fully up
-        peer_messaging = self.nodes[0].add_p2p_connection(BaseNode())
+        peer_messaging = self.nodes[1].add_p2p_connection(BaseNode())
+        
+        self.log.info("node 1 height is")
+        self.log.info(self.nodes[1].getblockcount())
+        self.log.info("node 2 height is")
+        self.log.info(self.nodes[2].getblockcount())
+
 
         # Generating a block on one of the nodes will get us out of IBD
-        blocks = [int(self.generate(self.nodes[0], sync_fun=lambda: self.sync_all(self.nodes[0:2]), nblocks=1)[0], 16)]
+        blocks = [int(self.generate(self.nodes[1], sync_fun=lambda: self.sync_all(self.nodes[1:2]), nblocks=2)[0], 16)]
+        
+        self.log.info("node 1 height is")
+        self.log.info(self.nodes[1].getblockcount())
+        self.log.info("node 2 height is")
+        self.log.info(self.nodes[2].getblockcount())
 
-        # Notice above how we called an RPC by calling a method with the same
-        # name on the node object. Notice also how we used a keyword argument
-        # to specify a named RPC argument. Neither of those are defined on the
-        # node object. Instead there's some __getattr__() magic going on under
-        # the covers to dispatch unrecognised attribute calls to the RPC
-        # interface.
-
-        # Logs are nice. Do plenty of them. They can be used in place of comments for
-        # breaking the test into sub-sections.
-        self.log.info("Starting test!")
-
-        self.log.info("Calling a custom function")
-        custom_function()
-
-        self.log.info("Calling a custom method")
-        self.custom_method()
-
-        self.log.info("Create some blocks")
-        self.tip = int(self.nodes[0].getbestblockhash(), 16)
-        self.block_time = self.nodes[0].getblock(self.nodes[0].getbestblockhash())['time'] + 1
-
-        height = self.nodes[0].getblockcount()
-
-        for _ in range(10):
-            # Use the blocktools functionality to manually build a block.
-            # Calling the generate() rpc is easier, but this allows us to exactly
-            # control the blocks and transactions.
-            block = create_block(self.tip, create_coinbase(height+1), self.block_time)
-            block.solve()
-            block_message = msg_block(block)
-            # Send message is used to send a P2P message to the node over our P2PInterface
-            peer_messaging.send_message(block_message)
-            self.tip = block.sha256
-            blocks.append(self.tip)
-            self.block_time += 1
-            height += 1
-
-      
-
-        self.log.info("Connect node2 and node1")
-        self.connect_nodes(1, 2)
-
-        self.log.info("Wait for node2 to receive all the blocks from node1")
-        self.sync_blocks()
-
-        self.log.info("Add P2P connection to node2")
-        self.nodes[0].disconnect_p2ps()
-
-        peer_receiving = self.nodes[2].add_p2p_connection(BaseNode())
-
-        self.log.info("Test that node2 propagates all the blocks to us")
-        assert_equal(self.nodes[1].getbestblockhash(), self.nodes[2].getbestblockhash())
-
-        getdata_request = msg_getdata()
-        for block in blocks:
-            getdata_request.inv.append(CInv(MSG_BLOCK, block))
-        peer_receiving.send_message(getdata_request)
-
-        # wait_until() will loop until a predicate condition is met. Use it to test properties of the
-        # P2PInterface objects.
-        peer_receiving.wait_until(lambda: sorted(blocks) == sorted(list(peer_receiving.block_receive_map.keys())), timeout=5)
-
-        self.log.info("Check that each block was received only once")
-        # The network thread uses a global lock on data access to the P2PConnection objects when sending and receiving
-        # messages. The test thread should acquire the global lock before accessing any P2PConnection data to avoid locking
-        # and synchronization issues. Note p2p.wait_until() acquires this global lock internally when testing the predicate.
-        with p2p_lock:
-            for block in peer_receiving.block_receive_map.values():
-                assert_equal(block, 1)
 
 
 if __name__ == '__main__':
